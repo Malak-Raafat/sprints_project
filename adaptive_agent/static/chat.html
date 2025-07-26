@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Research Agent Chat</title>
+    <style>
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            font-family: Arial, sans-serif;
+        }
+        .chat-header {
+            background: #4a6fa5;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 70%;
+        }
+        .user-message {
+            background: #e3f2fd;
+            margin-left: auto;
+            border: 1px solid #bbdefb;
+        }
+        .bot-message {
+            background: #f1f1f1;
+            margin-right: auto;
+            border: 1px solid #e0e0e0;
+        }
+        .input-area {
+            display: flex;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+        }
+        #user-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #send-btn {
+            margin-left: 10px;
+            padding: 10px 20px;
+            background: #4a6fa5;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .feedback-buttons {
+            display: flex;
+            justify-content: flex-end;
+            padding: 10px;
+            background: #f5f5f5;
+        }
+        .feedback-btn {
+            margin-left: 10px;
+            padding: 5px 10px;
+            background: transparent;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .timestamp {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>Research Assistant Chat</h2>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <!-- Messages will appear here -->
+        </div>
+        <div class="feedback-buttons" id="feedback-buttons" style="display:none;">
+            <span>Was this helpful?</span>
+            <button class="feedback-btn" data-rating="1">👍</button>
+            <button class="feedback-btn" data-rating="-1">👎</button>
+        </div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Ask about research topics or give feedback...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatMessages = document.getElementById('chat-messages');
+            const userInput = document.getElementById('user-input');
+            const sendBtn = document.getElementById('send-btn');
+            const feedbackButtons = document.getElementById('feedback-buttons');
+            
+            let lastProposalId = null;
+
+            function addMessage(text, isUser) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+                messageDiv.innerHTML = `
+                    <div>${text}</div>
+                    <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            async function sendMessage() {
+                const message = userInput.value.trim();
+                if (!message) return;
+                
+                addMessage(message, true);
+                userInput.value = '';
+                
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message }),
+                        credentials: 'include'
+                    });
+                    
+                    const data = await response.json();
+                    addMessage(data.response, false);
+                    
+                    // Show feedback buttons if it's a proposal
+                    if (data.proposal_id) {
+                        lastProposalId = data.proposal_id;
+                        feedbackButtons.style.display = 'flex';
+                    } else {
+                        feedbackButtons.style.display = 'none';
+                    }
+                } catch (error) {
+                    addMessage("Sorry, I'm having trouble connecting to the server.", false);
+                }
+            }
+
+            async function sendFeedback(rating) {
+                if (!lastProposalId) return;
+                
+                try {
+                    await fetch('/feedback', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            proposal_id: lastProposalId,
+                            rating: rating
+                        }),
+                        credentials: 'include'
+                    });
+                    
+                    feedbackButtons.style.display = 'none';
+                } catch (error) {
+                    console.error('Error sending feedback:', error);
+                }
+            }
+
+            sendBtn.addEventListener('click', sendMessage);
+            userInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+
+            document.querySelectorAll('.feedback-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    sendFeedback(parseInt(btn.dataset.rating));
+                });
+            });
+        });
+    </script>
+</body>
+</html>
